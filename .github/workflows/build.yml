@@ -1,0 +1,15 @@
+name: build
+
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: cmake build
+        run: |
+          cmake -B build
+          cmake --build build
+      - name: smoke test on itself (peep не exe, но MZ-check должен отработать)
+        run: ./build/peep README.md; ./build/peep nonexistent.exe; true
