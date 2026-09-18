@@ -59,3 +59,29 @@ const char* machine_name(uint16_t machine)
         default: return "unknown";
     }
 }
+
+bool read_optional_header(const std::vector<uint8_t>& buf, uint32_t pe_offset,
+                          uint16_t coff_optional_size, OptionalHeader& out)
+{
+    if (coff_optional_size == 0)
+        return false;  // object files без optional header, это норма
+
+    size_t off = pe_offset + 4 + 20;  // sig + coff
+    if (off + 2 > buf.size())
+        return false;
+
+    out.magic        = u16(buf, off);
+    out.linker_major = buf[off + 2];
+    out.linker_minor = buf[off + 3];
+    out.size_of_code = u32(buf, off + 4);
+    out.entrypoint   = u32(buf, off + 16);  // rva, адрес = imagebase + rva
+
+    if (out.magic == 0x20b)
+        out.imagebase = u32(buf, off + 24) | ((uint64_t)u32(buf, off + 28) << 32);
+    else if (out.magic == 0x10b)
+        out.imagebase = u32(buf, off + 28);
+    else
+        return false;  // rom image (0x107) не трогаем, маловероятно что встретится
+
+    return true;
+}
