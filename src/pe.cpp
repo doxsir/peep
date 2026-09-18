@@ -33,3 +33,29 @@ DosHeader read_dos_header(const std::vector<uint8_t>& buf)
     d.e_lfanew          = u32(buf, 0x3C);
     return d;
 }
+
+CoffHeader read_coff_header(const std::vector<uint8_t>& buf, uint32_t pe_offset)
+{
+    // PE\0\0 это 4 байта, coff идет сразу после
+    size_t off = pe_offset + 4;
+    CoffHeader c{};
+    c.machine              = u16(buf, off);
+    c.num_sections         = u16(buf, off + 2);
+    c.timestamp            = u32(buf, off + 4);
+    c.symbol_table_ptr     = u32(buf, off + 8);
+    c.num_symbols          = u32(buf, off + 12);
+    c.optional_header_size = u16(buf, off + 16);
+    c.characteristics      = u16(buf, off + 18);
+    return c;
+}
+
+const char* machine_name(uint16_t machine)
+{
+    switch (machine) {
+        case 0x8664: return "amd64";
+        case 0x014c: return "i386";
+        case 0xAA64: return "arm64";
+        case 0x01c4: return "armv7";
+        default: return "unknown";
+    }
+}
