@@ -36,3 +36,18 @@ struct CoffHeader {
 
 CoffHeader read_coff_header(const std::vector<uint8_t>& buf, uint32_t pe_offset);
 const char* machine_name(uint16_t machine);
+
+// optional header. у pe32 и pe32+ он разной ширины, imagebase скачет
+struct OptionalHeader {
+    uint16_t magic;              // 0x10b pe32, 0x20b pe32+
+    uint8_t  linker_major;
+    uint8_t  linker_minor;
+    uint32_t size_of_code;
+    uint32_t entrypoint;         // rva
+    uint64_t imagebase;
+    bool is_plus() const { return magic == 0x20b; }
+};
+
+// вернёт false если optional header отсутствует
+bool read_optional_header(const std::vector<uint8_t>& buf, uint32_t pe_offset,
+                          uint16_t coff_optional_size, OptionalHeader& out);
