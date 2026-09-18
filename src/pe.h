@@ -22,3 +22,17 @@ struct DosHeader {
 };
 
 DosHeader read_dos_header(const std::vector<uint8_t>& buf);
+
+// coff header идет сразу за PE\0\0 сигнатурой
+struct CoffHeader {
+    uint16_t machine;            // 0x8664 amd64, 0x14c i386, 0xaa64 arm64
+    uint16_t num_sections;
+    uint32_t timestamp;          // unix time сборки
+    uint32_t symbol_table_ptr;
+    uint32_t num_symbols;
+    uint16_t optional_header_size;
+    uint16_t characteristics;    // битовые флаги: exe/dll/large-address-aware...
+};
+
+CoffHeader read_coff_header(const std::vector<uint8_t>& buf, uint32_t pe_offset);
+const char* machine_name(uint16_t machine);
