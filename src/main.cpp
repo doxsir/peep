@@ -64,5 +64,18 @@ int main(int argc, char** argv)
            (coff.characteristics & 0x0002) ? " exe" : "",
            (coff.characteristics & 0x0020) ? " large-address-aware" : "");
 
+    OptionalHeader opt;
+    if (read_optional_header(buf, dos.e_lfanew, coff.optional_header_size, opt)) {
+        printf("\n== Optional header ==\n");
+        printf("format          : %s\n", opt.is_plus() ? "PE32+ (64-bit)" : "PE32 (32-bit)");
+        printf("linker          : %u.%02u\n", opt.linker_major, opt.linker_minor);
+        printf("size of code    : %u\n", opt.size_of_code);
+        printf("entrypoint      : rva 0x%X -> 0x%llX\n", opt.entrypoint,
+               (unsigned long long)(opt.imagebase + opt.entrypoint));
+        printf("imagebase       : 0x%llX\n", (unsigned long long)opt.imagebase);
+    } else {
+        printf("\noptional header: none (object file?)\n");
+    }
+
     return 0;
 }
