@@ -11,5 +11,11 @@ jobs:
         run: |
           cmake -B build
           cmake --build build
-      - name: smoke test on itself (peep не exe, но MZ-check должен отработать)
-        run: ./build/peep README.md; ./build/peep nonexistent.exe; true
+      - name: smoke - not an MZ file
+        run: |
+          out=$(./build/peep README.md) || true
+          echo "$out" | grep -q "not an MZ"
+      - name: smoke - missing file
+        run: |
+          out=$(./build/peep nope.exe) || true
+          echo "$out" | grep -q "can't open"
