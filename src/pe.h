@@ -82,3 +82,10 @@ int dump_exports(const std::vector<uint8_t>& buf, uint32_t pe_offset,
 // смещение, где кончаются секции и начинается overlay (дописанные данные)
 uint32_t overlay_offset(const std::vector<uint8_t>& buf, uint32_t pe_offset,
                         uint16_t coff_optional_size, uint16_t num_sections);
+
+// дерево ресурсов: тип -> сколько записей. возвращает число типов или -1
+int dump_resources(const std::vector<uint8_t>& buf, uint32_t pe_offset,
+                   uint16_t coff_optional_size, uint16_t num_sections, bool is_plus);
+
+// энтропия сырых байт секции (0..8), для поиска упакованных секций
+double section_entropy(const std::vector<uint8_t>& buf, uint32_t raw_ptr, uint32_t raw_size);
