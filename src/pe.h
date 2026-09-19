@@ -74,3 +74,7 @@ struct ImportDll {
 // возвращает число dll или -1 если импортов нет
 int dump_imports(const std::vector<uint8_t>& buf, uint32_t pe_offset,
                  uint16_t coff_optional_size, bool is_plus);
+
+// экспорты (для dll). печатает сам, возвращает число функций или -1 если экспортов нет
+int dump_exports(const std::vector<uint8_t>& buf, uint32_t pe_offset,
+                 uint16_t coff_optional_size, bool is_plus);
