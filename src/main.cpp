@@ -81,7 +81,7 @@ int main(int argc, char** argv)
     uint32_t nsecs = read_sections(buf, dos.e_lfanew, coff.optional_header_size,
                                    coff.num_sections, secs, 16);
     printf("\n== Sections (%u) ==\n", nsecs);
-    printf("%-10s %10s %12s %10s  flags\n", "name", "vsize", "vaddr", "rawsize");
+    printf("%-10s %10s %12X %10s  %5s  flags\n", "name", "vsize", "vaddr", "rawsize", "entr");
     for (uint32_t i = 0; i < nsecs; i++) {
         char flags[8];
         int fi = 0;
@@ -90,9 +90,11 @@ int main(int argc, char** argv)
         if (secs[i].characteristics & 0x00000020) flags[fi++] = 'C';
         if (!fi) flags[fi++] = '-';
         flags[fi] = 0;
-        printf("%-10s %10u %12X %10u  %s\n", secs[i].name,
+        // энтропия ~6+ на секции кода/данных обычно значит упаковку
+        double ent = section_entropy(buf, secs[i].pointer_to_raw_data, secs[i].size_of_raw_data);
+        printf("%-10s %10u %12X %10u  %5.2f  %s\n", secs[i].name,
                secs[i].virtual_size, secs[i].virtual_address,
-               secs[i].size_of_raw_data, flags);
+               secs[i].size_of_raw_data, ent, flags);
     }
 
     // импорты — самое вкусное: что файл таскает с собой
@@ -107,6 +109,13 @@ int main(int argc, char** argv)
     int exports = dump_exports(buf, dos.e_lfanew, coff.optional_header_size, opt.is_plus());
     if (exports > 0)
         printf("\n== Exports ==\n");
+
+    // ресурсы: иконки, версии, манифест...
+    printf("\n== Resources ==\n");
+    int rtypes = dump_resources(buf, dos.e_lfanew, coff.optional_header_size,
+                                coff.num_sections, opt.is_plus());
+    if (rtypes <= 0)
+        printf("  none\n");
 
     // overlay: всё что дописано после последней секции. там живут инсталляторы,
     // подписи и иногда внезапно целые zip-архивы
