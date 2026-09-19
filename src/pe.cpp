@@ -249,3 +249,20 @@ int dump_exports(const std::vector<uint8_t>& buf, uint32_t pe_offset,
         printf("    ... и ещё %u\n", nnames - printed);
     return (int)nfuncs;
 }
+
+uint32_t overlay_offset(const std::vector<uint8_t>& buf, uint32_t pe_offset,
+                        uint16_t coff_optional_size, uint16_t num_sections)
+{
+    size_t sec_off = pe_offset + 4 + 20 + coff_optional_size;
+    uint32_t end = pe_offset + 4 + 20 + coff_optional_size + (uint32_t)num_sections * 40;
+    for (uint16_t i = 0; i < num_sections; i++) {
+        size_t s = sec_off + (size_t)i * 40;
+        if (s + 40 > buf.size())
+            break;
+        uint32_t rawptr = u32(buf, s + 20);
+        uint32_t rawsize = u32(buf, s + 16);
+        if (rawptr + rawsize > end)
+            end = rawptr + rawsize;
+    }
+    return end;
+}
