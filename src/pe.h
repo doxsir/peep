@@ -78,3 +78,7 @@ int dump_imports(const std::vector<uint8_t>& buf, uint32_t pe_offset,
 // экспорты (для dll). печатает сам, возвращает число функций или -1 если экспортов нет
 int dump_exports(const std::vector<uint8_t>& buf, uint32_t pe_offset,
                  uint16_t coff_optional_size, bool is_plus);
+
+// смещение, где кончаются секции и начинается overlay (дописанные данные)
+uint32_t overlay_offset(const std::vector<uint8_t>& buf, uint32_t pe_offset,
+                        uint16_t coff_optional_size, uint16_t num_sections);
