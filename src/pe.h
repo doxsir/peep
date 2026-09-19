@@ -64,3 +64,13 @@ struct SectionHeader {
 uint32_t read_sections(const std::vector<uint8_t>& buf, uint32_t pe_offset,
                        uint16_t coff_optional_size, uint16_t num_sections,
                        SectionHeader* out, uint32_t max);
+
+// импорты: список dll, у каждой - список функций
+struct ImportDll {
+    std::vector<char*> names;   // указатели внутрь buf, не владеем
+};
+
+// печатает импорты сама, чтобы не тащить промежуточные структуры
+// возвращает число dll или -1 если импортов нет
+int dump_imports(const std::vector<uint8_t>& buf, uint32_t pe_offset,
+                 uint16_t coff_optional_size, bool is_plus);
