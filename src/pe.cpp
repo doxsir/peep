@@ -196,3 +196,56 @@ int dump_imports(const std::vector<uint8_t>& buf, uint32_t pe_offset,
     }
     return dlls;
 }
+
+int dump_exports(const std::vector<uint8_t>& buf, uint32_t pe_offset,
+                 uint16_t coff_optional_size, bool is_plus)
+{
+    (void)is_plus;  // export directory одинаков для pe32/pe32+
+    size_t opt = pe_offset + 4 + 20;
+    size_t dd = opt + 0x00;  // data directory entry 0 = exports
+    if (dd + 8 > buf.size())
+        return -1;
+    uint32_t dir_rva = u32(buf, dd);
+    uint32_t dir_size = u32(buf, dd + 4);
+    if (!dir_rva)
+        return -1;
+
+    uint16_t num_sections = u16(buf, pe_offset + 6);
+    uint32_t dir_off = rva_to_offset(buf, pe_offset, coff_optional_size, num_sections, dir_rva);
+    if (!dir_off || dir_off + 40 > buf.size())
+        return -1;
+
+    const char* dll_name = cstr_at(buf, rva_to_offset(buf, pe_offset, coff_optional_size,
+                                                      num_sections, u32(buf, dir_off + 12)));
+    uint32_t base = u32(buf, dir_off + 16);
+    uint32_t nfuncs = u32(buf, dir_off + 20);
+    uint32_t nnames = u32(buf, dir_off + 24);
+    uint32_t funcs_off = rva_to_offset(buf, pe_offset, coff_optional_size, num_sections, u32(buf, dir_off + 28));
+    uint32_t names_off = rva_to_offset(buf, pe_offset, coff_optional_size, num_sections, u32(buf, dir_off + 32));
+    uint32_t ords_off = rva_to_offset(buf, pe_offset, coff_optional_size, num_sections, u32(buf, dir_off + 36));
+
+    printf("  dll: %s, ordinal base: %u, functions: %u (named: %u)\n",
+           dll_name, base, nfuncs, nnames);
+
+    int printed = 0;
+    for (uint32_t i = 0; i < nnames && printed < 50; i++, printed++) {
+        if (names_off + 4 > buf.size() || ords_off + 2 > buf.size())
+            break;
+        uint32_t name_rva = u32(buf, names_off + i * 4);
+        uint16_t ord_index = u16(buf, ords_off + i * 2);
+        uint32_t func_rva = u32(buf, funcs_off + (uint32_t)ord_index * 4);
+        const char* marker = "";
+        // rva внутрь самой export directory = forwarder, там строка "чужая.dll.функция"
+        if (func_rva >= dir_rva && func_rva < dir_rva + dir_size) {
+            marker = " (forwarder)";
+        }
+        printf("    %u: %s%s\n", base + ord_index,
+               cstr_at(buf, rva_to_offset(buf, pe_offset, coff_optional_size, num_sections, name_rva)),
+               marker);
+        if (marker[0])
+            printf("        -> %s\n", cstr_at(buf, rva_to_offset(buf, pe_offset, coff_optional_size, num_sections, func_rva)));
+    }
+    if (nnames > (uint32_t)printed)
+        printf("    ... и ещё %u\n", nnames - printed);
+    return (int)nfuncs;
+}
