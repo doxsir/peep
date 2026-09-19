@@ -1,4 +1,5 @@
 #include "pe.h"
+#include <cstdio>
 
 // читаем little-endian слова руками, потому что alignment-проказы structs нам не друг
 static uint16_t u16(const std::vector<uint8_t>& b, size_t off)
@@ -10,6 +11,11 @@ static uint32_t u32(const std::vector<uint8_t>& b, size_t off)
 {
     return (uint32_t)b[off] | ((uint32_t)b[off + 1] << 8) |
            ((uint32_t)b[off + 2] << 16) | ((uint32_t)b[off + 3] << 24);
+}
+
+static uint64_t u64(const std::vector<uint8_t>& b, size_t off)
+{
+    return (uint64_t)u32(b, off) | ((uint64_t)u32(b, off + 4) << 32);
 }
 
 DosHeader read_dos_header(const std::vector<uint8_t>& buf)
@@ -110,4 +116,83 @@ uint32_t read_sections(const std::vector<uint8_t>& buf, uint32_t pe_offset,
         n++;
     }
     return n;
+}
+
+// rva -> смещение в файле через таблицу секций
+static uint32_t rva_to_offset(const std::vector<uint8_t>& buf, uint32_t pe_offset,
+                              uint16_t opt_size, uint16_t num_sections, uint32_t rva)
+{
+    size_t sec_off = pe_offset + 4 + 20 + opt_size;
+    for (uint16_t i = 0; i < num_sections; i++) {
+        size_t s = sec_off + (size_t)i * 40;
+        if (s + 40 > buf.size())
+            break;
+        uint32_t vaddr = u32(buf, s + 12);
+        uint32_t vsize = u32(buf, s + 8);
+        uint32_t rawsize = u32(buf, s + 16);
+        uint32_t rawptr = u32(buf, s + 20);
+        uint32_t span = rawsize > vsize ? rawsize : vsize;  // кто из них больше - загадка
+        if (rva >= vaddr && rva < vaddr + span)
+            return rva - vaddr + rawptr;
+    }
+    return 0;
+}
+
+static const char* cstr_at(const std::vector<uint8_t>& buf, uint32_t file_off)
+{
+    if (file_off == 0 || file_off >= buf.size())
+        return "";
+    return (const char*)&buf[file_off];
+}
+
+int dump_imports(const std::vector<uint8_t>& buf, uint32_t pe_offset,
+                 uint16_t coff_optional_size, bool is_plus)
+{
+    size_t opt = pe_offset + 4 + 20;
+    size_t dd = opt + (is_plus ? 0x70 : 0x68);  // data directory, entry 1 = imports
+    if (dd + 8 > buf.size())
+        return -1;
+    uint32_t imp_rva = u32(buf, dd);
+    if (!imp_rva)
+        return -1;
+
+    uint32_t imp_off = rva_to_offset(buf, pe_offset, coff_optional_size,
+                                     u16(buf, pe_offset + 6), imp_rva);
+    if (!imp_off)
+        return -1;
+
+    int dlls = 0;
+    for (size_t d = imp_off; dlls < 64; d += 20) {  // 64 dll хватит всем, ну почти
+        if (d + 20 > buf.size())
+            break;
+        uint32_t oft = u32(buf, d);
+        uint32_t name_rva = u32(buf, d + 12);
+        uint32_t ft = u32(buf, d + 16);
+        if (!oft && !ft && !name_rva)
+            break;  // нулевой дескриптор = конец таблицы
+
+        printf("  %s\n", cstr_at(buf, rva_to_offset(buf, pe_offset, coff_optional_size,
+                                                    u16(buf, pe_offset + 6), name_rva)));
+        uint32_t thunk_rva = oft ? oft : ft;
+        uint32_t toff = rva_to_offset(buf, pe_offset, coff_optional_size,
+                                      u16(buf, pe_offset + 6), thunk_rva);
+        size_t tsize = is_plus ? 8 : 4;
+        for (size_t t = toff, k = 0; t + tsize <= buf.size(); t += tsize, k++) {
+            (void)k;
+            uint64_t val = is_plus ? u64(buf, t) : u32(buf, t);
+            if (!val)
+                break;
+            uint64_t ordinal_flag = is_plus ? 0x8000000000000000ULL : 0x80000000ULL;
+            if (val & ordinal_flag) {
+                printf("      #%u (ordinal)\n", (unsigned)(val & 0xFFFF));
+            } else {
+                // hint (2 байта) + имя
+                uint32_t name_off = rva_to_offset(buf, pe_offset, coff_optional_size,
+                                                  u16(buf, pe_offset + 6), (uint32_t)val);
+                printf("      %s\n", cstr_at(buf, name_off ? name_off + 2 : 0));
+            }
+        }
+        dlls++;
+    }
+    return dlls;
 }
