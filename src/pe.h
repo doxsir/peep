@@ -51,3 +51,16 @@ struct OptionalHeader {
 // вернёт false если optional header отсутствует
 bool read_optional_header(const std::vector<uint8_t>& buf, uint32_t pe_offset,
                           uint16_t coff_optional_size, OptionalHeader& out);
+
+struct SectionHeader {
+    char     name[9];            // 8 байт + ноль, имена длиннее 8 байт - позже
+    uint32_t virtual_size;
+    uint32_t virtual_address;
+    uint32_t size_of_raw_data;
+    uint32_t pointer_to_raw_data;
+    uint32_t characteristics;
+};
+
+uint32_t read_sections(const std::vector<uint8_t>& buf, uint32_t pe_offset,
+                       uint16_t coff_optional_size, uint16_t num_sections,
+                       SectionHeader* out, uint32_t max);
