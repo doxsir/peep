@@ -1,5 +1,6 @@
 #include "pe.h"
 #include <cstdio>
+#include <cmath>
 
 // читаем little-endian слова руками, потому что alignment-проказы structs нам не друг
 static uint16_t u16(const std::vector<uint8_t>& b, size_t off)
@@ -265,4 +266,101 @@ uint32_t overlay_offset(const std::vector<uint8_t>& buf, uint32_t pe_offset,
             end = rawptr + rawsize;
     }
     return end;
+}
+
+static const char* res_type_name(uint32_t id)
+{
+    switch (id) {
+        case 1: return "CURSOR";
+        case 2: return "BITMAP";
+        case 3: return "ICON";
+        case 4: return "MENU";
+        case 5: return "DIALOG";
+        case 6: return "STRING TABLE";
+        case 9: return "ACCELERATORS";
+        case 14: return "GROUP ICON";
+        case 16: return "VERSION INFO";
+        case 24: return "MANIFEST";
+        default: return 0;
+    }
+}
+
+int dump_resources(const std::vector<uint8_t>& buf, uint32_t pe_offset,
+                   uint16_t coff_optional_size, uint16_t num_sections, bool is_plus)
+{
+    size_t opt = pe_offset + 4 + 20;
+    size_t dd = opt + (is_plus ? 0x70 : 0x68) + 8 * 2;  // entry 2 = resources
+    if (dd + 8 > buf.size())
+        return -1;
+    uint32_t res_rva = u32(buf, dd);
+    if (!res_rva)
+        return -1;
+
+    // rva ресурсов относительны начала ресурсной секции
+    uint32_t res_raw = 0, res_vaddr = 0xFFFFFFFF;
+    size_t sec_off = opt + coff_optional_size;
+    for (uint16_t i = 0; i < num_sections; i++) {
+        size_t s = sec_off + (size_t)i * 40;
+        if (s + 40 > buf.size())
+            break;
+        uint32_t vaddr = u32(buf, s + 12);
+        uint32_t vsize = u32(buf, s + 8);
+        if (res_rva >= vaddr && res_rva < vaddr + (vsize ? vsize : 0x10000000)) {
+            res_raw = u32(buf, s + 20);
+            res_vaddr = vaddr;
+            break;
+        }
+    }
+    if (res_vaddr == 0xFFFFFFFF)
+        return -1;
+    size_t res_base = res_raw + (res_rva - res_vaddr);
+    if (res_base + 16 > buf.size())
+        return -1;
+
+    // уровень 1: типы ресурсов
+    uint16_t named = u16(buf, res_base + 12);
+    uint16_t by_id = u16(buf, res_base + 14);
+    int types = 0;
+    size_t entry = res_base + 16;
+    for (uint32_t e = 0; e < (uint32_t)named + by_id; e++, entry += 8) {
+        if (entry + 8 > buf.size())
+            break;
+        uint32_t name_field = u32(buf, entry);
+        uint32_t ofs_field = u32(buf, entry + 4);
+        if (!(ofs_field & 0x80000000))
+            continue;  // уровень 1 всегда ведёт в поддиректорию, но вдруг битый
+
+        // поддерево уровня 2: просто считаем записи
+        size_t sub = res_base + (ofs_field & 0x7FFFFFFF);
+        if (sub + 16 > buf.size())
+            continue;
+        uint32_t count = u16(buf, sub + 12) + u16(buf, sub + 14);
+
+        const char* tn = res_type_name(name_field & 0x7FFFFFFF);
+        if (name_field & 0x80000000)
+            printf("  named resource (%u items)\n", count);
+        else if (tn)
+            printf("  %s (%u items)\n", tn, count);
+        else
+            printf("  type %u (%u items)\n", name_field & 0x7FFFFFFF, count);
+        types++;
+    }
+    return types;
+}
+
+double section_entropy(const std::vector<uint8_t>& buf, uint32_t raw_ptr, uint32_t raw_size)
+{
+    if (raw_size == 0 || raw_ptr + raw_size > buf.size())
+        return 0.0;
+    uint32_t freq[256] = {0};
+    for (uint32_t i = 0; i < raw_size; i++)
+        freq[buf[raw_ptr + i]]++;
+    double e = 0.0;
+    for (int i = 0; i < 256; i++) {
+        if (!freq[i])
+            continue;
+        double p = (double)freq[i] / raw_size;
+        e -= p * log2(p);  // log2 в <cmath>, с masked c++17 норм
+    }
+    return e;
 }
