@@ -96,11 +96,17 @@ int main(int argc, char** argv)
     }
 
     // импорты — самое вкусное: что файл таскает с собой
+    printf("\n== Imports ==\n");
     int dlls = dump_imports(buf, dos.e_lfanew, coff.optional_header_size, opt.is_plus());
-    if (dlls > 0)
-        printf("\n== Imports (%d dll) ==\n", dlls);
-    else if (dlls == 0)
-        printf("\nno imports\n");
+    if (dlls == 0)
+        printf("  none\n");
+    else if (dlls < 0)
+        printf("  no import directory\n");
+
+    // экспорты есть только у dll (и у некоторых системных exe)
+    int exports = dump_exports(buf, dos.e_lfanew, coff.optional_header_size, opt.is_plus());
+    if (exports > 0)
+        printf("\n== Exports ==\n");
 
     return 0;
 }
