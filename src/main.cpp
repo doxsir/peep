@@ -95,5 +95,12 @@ int main(int argc, char** argv)
                secs[i].size_of_raw_data, flags);
     }
 
+    // импорты — самое вкусное: что файл таскает с собой
+    int dlls = dump_imports(buf, dos.e_lfanew, coff.optional_header_size, opt.is_plus());
+    if (dlls > 0)
+        printf("\n== Imports (%d dll) ==\n", dlls);
+    else if (dlls == 0)
+        printf("\nno imports\n");
+
     return 0;
 }
