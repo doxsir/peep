@@ -77,5 +77,23 @@ int main(int argc, char** argv)
         printf("\noptional header: none (object file?)\n");
     }
 
+    SectionHeader secs[16];  // больше 16 секций бывает редко, ну и ладно
+    uint32_t nsecs = read_sections(buf, dos.e_lfanew, coff.optional_header_size,
+                                   coff.num_sections, secs, 16);
+    printf("\n== Sections (%u) ==\n", nsecs);
+    printf("%-10s %10s %12s %10s  flags\n", "name", "vsize", "vaddr", "rawsize");
+    for (uint32_t i = 0; i < nsecs; i++) {
+        char flags[8];
+        int fi = 0;
+        if (secs[i].characteristics & 0x40000000) flags[fi++] = 'W';
+        if (secs[i].characteristics & 0x80000000) flags[fi++] = 'X';
+        if (secs[i].characteristics & 0x00000020) flags[fi++] = 'C';
+        if (!fi) flags[fi++] = '-';
+        flags[fi] = 0;
+        printf("%-10s %10u %12X %10u  %s\n", secs[i].name,
+               secs[i].virtual_size, secs[i].virtual_address,
+               secs[i].size_of_raw_data, flags);
+    }
+
     return 0;
 }
