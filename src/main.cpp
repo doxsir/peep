@@ -108,5 +108,20 @@ int main(int argc, char** argv)
     if (exports > 0)
         printf("\n== Exports ==\n");
 
+    // overlay: всё что дописано после последней секции. там живут инсталляторы,
+    // подписи и иногда внезапно целые zip-архивы
+    uint32_t ooff = overlay_offset(buf, dos.e_lfanew, coff.optional_header_size, coff.num_sections);
+    if (ooff && (uint32_t)size > ooff) {
+        printf("\n== Overlay ==\n");
+        printf("offset: 0x%X, size: %u bytes (%.1f%% of file)\n",
+               ooff, (uint32_t)size - ooff, 100.0 * (size - ooff) / size);
+        printf("first bytes:");
+        for (int i = 0; i < 32 && ooff + i < size; i++)
+            printf(" %02X", buf[ooff + i]);
+        printf("\n");
+    } else {
+        printf("\nno overlay\n");
+    }
+
     return 0;
 }
