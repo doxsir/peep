@@ -85,3 +85,29 @@ bool read_optional_header(const std::vector<uint8_t>& buf, uint32_t pe_offset,
 
     return true;
 }
+
+// секции начинаются сразу после optional header
+uint32_t read_sections(const std::vector<uint8_t>& buf, uint32_t pe_offset,
+                       uint16_t coff_optional_size, uint16_t num_sections,
+                       SectionHeader* out, uint32_t max)
+{
+    size_t off = pe_offset + 4 + 20 + coff_optional_size;
+    uint32_t n = 0;
+    for (uint16_t i = 0; i < num_sections && n < max; i++) {
+        size_t s = off + (size_t)i * 40;  // каждая запись ровно 40 байт
+        if (s + 40 > buf.size())
+            break;
+        SectionHeader& sec = out[n];
+        int j = 0;
+        for (; j < 8 && buf[s + j]; j++)
+            sec.name[j] = (char)buf[s + j];
+        sec.name[j] = 0;
+        sec.virtual_size       = u32(buf, s + 8);
+        sec.virtual_address    = u32(buf, s + 12);
+        sec.size_of_raw_data   = u32(buf, s + 16);
+        sec.pointer_to_raw_data = u32(buf, s + 20);
+        sec.characteristics    = u32(buf, s + 36);
+        n++;
+    }
+    return n;
+}
